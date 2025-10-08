@@ -6,10 +6,7 @@ import { assets } from '../../assets/assets';
 function Main() {
     const [question, setQuestion] = useState("");
     const [answer,  setAnswer] = useState("");
-    // const [recentQuestion, setRecentQuestion] = useState("");
-    // const [prevQuestion, setPrevQuestion] = useState([]);
     const [loading, setLoading] = useState(false);
-    // const [showAnser, setShowAnswer] = useState(false);
 
 
     async function generateAnswer() {
@@ -37,13 +34,13 @@ function Main() {
             }
         }
         finalResponse = finalResponse.replace(/^undefined/, "");
-        let finalResponse2 = finalResponse.split("*").join("</br>")
+        let finalResponse2 = finalResponse.split("*").join("</br>");
+        setLoading(false);
         setAnswer(finalResponse2);
 
         // Displaying raw data
         // setAnswer(response.data.candidates[0].content.parts[0].text);
 
-        setLoading(false);
     }
 
     return (
