@@ -7,16 +7,20 @@ const Sidebar = () => {
 
     const [extended,setExtended] = useState(true);
 
+    function refreshPage() {
+        window.location.reload();
+    }
+
   return (
         <>
             <div className='sidebar'>
                 <div className='top'>
                     <img onClick={()=>setExtended(prev=>!prev)} src={assets.menu_icon} className='menu' />
-                    <div className='new-chat'>
+                    <div className='new-chat' onClick={refreshPage}>
                         <img src={assets.plus_icon} />
                         {extended?<p>New Chat</p>:null}
                     </div>
-                    {extended
+                    {/* {extended
                     ? <div className='recent'>
                         <p className="recent-title">Recent</p>
                         <div className="recent-entry">
@@ -24,7 +28,7 @@ const Sidebar = () => {
                             <p>What is react ...</p>
                         </div>
                     </div>
-                    : null}
+                    : null} */}
                 </div>
                 <div className='bottom'>
                     <div className="bottom-item recent-entry">

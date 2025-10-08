@@ -6,10 +6,10 @@ import { assets } from '../../assets/assets';
 function Main() {
     const [question, setQuestion] = useState("");
     const [answer,  setAnswer] = useState("");
-    const [recentQuestion, setRecentQuestion] = useState("");
-    const [prevQuestion, setPrevQuestion] = useState([]);
+    // const [recentQuestion, setRecentQuestion] = useState("");
+    // const [prevQuestion, setPrevQuestion] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [showAnser, setShowAnswer] = useState(false);
+    // const [showAnser, setShowAnswer] = useState(false);
 
 
     async function generateAnswer() {
