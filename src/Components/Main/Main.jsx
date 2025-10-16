@@ -1,5 +1,9 @@
+// 2nd JS file: Uses custom question first and then search on google to give response
+
 import React, { useState } from 'react'
 import './Main.css';
+import Fuse from "fuse.js";
+import customQA from '../customQA';
 import axios from 'axios';
 import { assets } from '../../assets/assets';
 
@@ -8,39 +12,65 @@ function Main() {
     const [answer,  setAnswer] = useState("");
     const [loading, setLoading] = useState(false);
 
-
+    
     async function generateAnswer() {
         // setAnswer("Loading...");
         setLoading(true);
-        const response = await axios({
+
+        //Check for custom QA first
+        const foundQA = customQA.find(item =>
+            question.toLowerCase().includes(item.question.toLowerCase())
+        );
+
+        if (foundQA) {
+            setAnswer(foundQA.answer);
+            setLoading(false);
+            return; // Stop here, don’t call API
+        }
+
+        // If not found, call Gemini API
+        try {
+            const response = await axios({
             url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
             method: "post",
             data: {
-                contents: [
-                    { parts: [{ text: question }] },
-                ],
+                contents: [{ parts: [{ text: question }] }],
             },
         });
 
-        // Converting the generated information into proper format for the end user
-        let sameResponse = response.data.candidates[0].content.parts[0].text;
-        let newSplitReponse = sameResponse.split("**");
-        let finalResponse;
-        for(let i=0; i < newSplitReponse.length; i++) {
-            if(i === 0 || i%2 !== 1) {
-              finalResponse +=  newSplitReponse[i]; 
+        let getResponse = response.data.candidates[0].content.parts[0].text;
+        
+        // Format the reponse and remove "**" and replace "*" with a new line
+        let formatResponse = getResponse.split("**");
+        let finalResponse = "";
+        for (let i = 0; i < formatResponse.length; i++) {
+            if (i === 0 || i % 2 !== 1) {
+                finalResponse += formatResponse[i];
             } else {
-                finalResponse +=  "<b>" +newSplitReponse[i]+ "</b>";
+                finalResponse += "<b>" + formatResponse[i] + "</b>";
             }
         }
+
         finalResponse = finalResponse.replace(/^undefined/, "");
         let finalResponse2 = finalResponse.split("*").join("</br>");
-        setLoading(false);
+        
+        // Display Reponse
         setAnswer(finalResponse2);
+        
+        } catch (error) {
+            setAnswer("⚠️ Error generating answer. Please try again later.");
+            console.error("Error: " + error);
+        } finally {
+            setLoading(false);
+        }
 
-        // Displaying raw data
-        // setAnswer(response.data.candidates[0].content.parts[0].text);
+    }
 
+    const handleKeyPress = (e) => {
+        if(e.key === "Enter") {
+            e.preventDefault();
+            generateAnswer();
+        }
     }
 
     return (
@@ -101,7 +131,7 @@ function Main() {
 
                     <div className='main-bottom'>
                         <div className='search-box'>
-                            <input value={question} onChange={(e) => setQuestion(e.target.value)} type='text' placeholder='Prompt here' />
+                            <input value={question} onChange={(e) => setQuestion(e.target.value)} onKeyDown={handleKeyPress} type='text' placeholder='Prompt here' />
                             <div>
                                 <img src={assets.gallery_icon} alt="" />
                                 <img src={assets.mic_icon} alt="" />
