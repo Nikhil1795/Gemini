@@ -18,7 +18,12 @@ If you are developing a production application, we recommend using TypeScript wi
 
 
 Upload to git
-git status
+git add -A
 git add .
 git commit -m "Your descriptive commit message"
 git push origin main
+
+
+Push to vercel
+vercel login
+vercel --prod
