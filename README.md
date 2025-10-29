@@ -27,3 +27,11 @@ git push origin main
 Push to vercel
 vercel login
 vercel --prod
+
+
+1. It can autocorrect the questions/ and understands the broken words
+2. It have predefined sysnonyms stored and checks the meaning of each word you enter from the lists
+3. It has predefined list of QA set
+4. Has the ability to give the answers from predefined list and gemini api
+5. Gives the answer in proper readable format
+6. It has the feature of speech to text translation and then generates the answers

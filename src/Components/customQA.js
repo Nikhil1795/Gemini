@@ -17,10 +17,9 @@ const customQA = [
     },
     {
         question: "What is your favorite fruit?",
-        answer: "I like mangoes the most.",
+        answer: "I like mangoes.",
     },
-
-    { question: "hi", answer: "Hey there! 👋 How can I help you today?" },
+  { question: "hi", answer: "Hey there! 👋 How can I help you today?" },
   { question: "hello", answer: "Hello! 😊 How’s your day going?" },
   { question: "how are you", answer: "I’m great, thanks for asking! How about you?" },
   { question: "who are you", answer: "I’m your friendly chatbot powered by Gemini AI!" },

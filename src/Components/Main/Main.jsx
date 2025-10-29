@@ -1,4 +1,3 @@
-// src/components/Main.jsx
 import React, { useState, useEffect, useRef } from "react";
 import "./Main.css";
 import Fuse from "fuse.js";
@@ -9,198 +8,233 @@ import { assets } from "../../assets/assets";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 function Main() {
-  const [question, setQuestion] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [chatHistory, setChatHistory] = useState([]);
+    const [question, setQuestion] = useState("");
+    const [loading, setLoading] = useState(false);
+    const [chatHistory, setChatHistory] = useState([]);
+    const [lastTopic, setLastTopic] = useState(""); // for "more" context
+    const chatEndRef = useRef(null);
 
-  const chatEndRef = useRef(null);
+    // new state
+    const [generatedImage, setGeneratedImage] = useState(null);
+    const [generatingImage, setGeneratingImage] = useState(false);
 
-  // Scrolls to last message
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatHistory]);
 
-  // Normalize input using synonyms
-  function normalizeQuestion(input) {
-    return input
-      .toLowerCase()
-      .split(" ")
-      .map((word) => synonyms[word] || word)
-      .join(" ");
-  }
+    // Auto-scroll to latest chat
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, [chatHistory]);
 
-  // Generate Answer (Custom QnA + Gemini fallback)
-  async function generateAnswer() {
-    if (!question.trim()) return;
-    setLoading(true);
-
-    // Stop mic if active
-    SpeechRecognition.stopListening();
-
-    const normalized = normalizeQuestion(question);
-    const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.2 });
-    const customMatch = fuse.search(normalized);
-
-    let botResponse = "";
-    
-    // ✅ Check for close match (only if at least one word overlaps)
-    if (customMatch.length > 0) {
-      const top = customMatch[0];
-      const questionWords = normalized.split(" ");
-      const matchedWords = top.item.question
-        .split(" ")
-        .filter((w) => questionWords.includes(w)).length;
-
-      // Accept only if question shares 50%+ of words (avoids “what is js” ≈ “what is your name”)
-      if (matchedWords / questionWords.length >= 0.5) {
-        botResponse = top.item.answer;
-      }
+    // Normalize input using synonyms
+    function normalizeQuestion(input) {
+        return input.toLowerCase().split(" ").map((word) => synonyms[word] || word).join(" ");
     }
 
-    if (!botResponse) {
-      // Gemini API fallback
-      try {
-        const response = await axios({
-          url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
-          method: "post",
-          data: {
-            contents: [{ parts: [{ text: question }] }],
-          },
-        });
+    // 🎯 Generate Answer (Custom Q&A + Gemini fallback)
+    async function generateAnswer() {
+        if (!question.trim()) return;
+        setLoading(true);
+        SpeechRecognition.stopListening();
 
-        const rawText =
-          response.data.candidates[0]?.content?.parts[0]?.text ||
-          "Sorry, I didn’t get that.";
+        let currentInput = question.toLowerCase();
 
-        botResponse = rawText
-          .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-          .replace(/\*(.*?)\*/g, "<br/>$1");
-      } catch (err) {
-        botResponse = "⚠️ Error fetching response from Gemini.";
-      }
+        // 🧠 If user asks for "more" → refer to previous topic
+        if (currentInput.includes("more") && lastTopic) {
+            currentInput = `Give me more about: ${lastTopic}`;
+        }
+
+        const normalized = normalizeQuestion(currentInput);
+        const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.2 });
+        const customMatch = fuse.search(normalized);
+        let botResponse = "";
+
+        // ✅ Custom Q&A match
+        if (customMatch.length > 0) {
+            const top = customMatch[0];
+            const questionWords = normalized.split(" ");
+            const matchedWords = top.item.question
+                .split(" ")
+                .filter((w) => questionWords.includes(w)).length;
+
+            if (matchedWords / questionWords.length >= 0.5) {
+                botResponse = top.item.answer;
+
+                // Save chat and stop here (no Gemini call)
+                setChatHistory((prev) => [
+                    ...prev,
+                    { type: "user", text: question },
+                    { type: "bot", text: botResponse },
+                ]);
+                setLastTopic(question);
+                setQuestion("");
+                resetTranscript();
+                setLoading(false);
+                return;
+            }
+        }
+
+        // ✅ Gemini API fallback
+        try {
+            const response = await axios({
+                url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
+                method: "post",
+                data: {
+                    contents: [{ parts: [{ text: currentInput }] }],
+                },
+            });
+
+            const rawText =
+                response.data.candidates[0]?.content?.parts[0]?.text ||
+                "Sorry, I didn’t get that.";
+
+            botResponse = rawText
+                .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+                .replace(/\*(.*?)\*/g, "<i>$1</i>")
+                .replace(/\n/g, "<br>");
+        } catch (err) {
+            botResponse = "⚠️ Error fetching response from Gemini.";
+        }
+
+        // ✅ Add Gemini answer to chat
+        setChatHistory((prev) => [
+            ...prev,
+            { type: "user", text: question },
+            { type: "bot", text: botResponse },
+        ]);
+        setLastTopic(question);
+        setQuestion("");
+        resetTranscript();
+        setLoading(false);
     }
 
-    // Add to chat
-    setChatHistory((prev) => [
-      ...prev,
-      { type: "user", text: question },
-      { type: "bot", text: botResponse },
-    ]);
+    // Pressing Enter sends question
+    const handleKeyPress = (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            generateAnswer();
+        }
+    };
 
-    setQuestion("");
-    resetTranscript();
-    setLoading(false);
-  }
+    // 🎙️ Speech Recognition Setup
+    const {
+        transcript,
+        listening,
+        resetTranscript,
+        browserSupportsSpeechRecognition,
+    } = useSpeechRecognition();
 
-  // Enter key triggers send
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      generateAnswer();
+    useEffect(() => {
+        if (transcript) setQuestion(transcript);
+    }, [transcript]);
+
+    const startListening = () => {
+        resetTranscript();
+        SpeechRecognition.startListening({ continuous: true, language: "en-IN" });
+    };
+
+    const stopListening = () => {
+        SpeechRecognition.stopListening();
+    };
+
+    if (!browserSupportsSpeechRecognition) {
+        return <p>Your browser does not support speech recognition.</p>;
     }
-  };
 
-  // 🎙️ Speech Recognition Setup
-  const {
-    transcript,
-    listening,
-    resetTranscript,
-    browserSupportsSpeechRecognition,
-  } = useSpeechRecognition();
+    // 🧾 Format message text for lists, bold, italics
+    function formatMessage(text) {
+        if (!text) return "";
 
-  // Update input as user speaks
-  useEffect(() => {
-    if (transcript) setQuestion(transcript);
-  }, [transcript]);
+        let formatted = text
+            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+            .replace(/\*(.*?)\*/g, "<i>$1</i>")
+            .replace(/(^|\n)(\d+)\.\s+(.*?)(?=\n|$)/g, "$1<li>$2. $3</li>")
+            .replace(/(^|\n)[•\-]\s+(.*?)(?=\n|$)/g, "$1<li>• $2</li>")
+            .replace(/\n/g, "<br>");
 
-  // Start mic
-  const startListening = () => {
-    resetTranscript();
-    SpeechRecognition.startListening({ continuous: true, language: "en-IN" });
-  };
+        if (formatted.includes("<li>")) formatted = "<ul>" + formatted + "</ul>";
 
-  // Stop mic
-  const stopListening = () => {
-    SpeechRecognition.stopListening();
-  };
+        return formatted;
+    }
 
-  if (!browserSupportsSpeechRecognition) {
-    return <p>Your browser does not support speech recognition.</p>;
-  }
+    // Dowload image
+    function downloadDataUrl(dataUrl, filename = "generated-image.png") {
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
 
-  return (
-    <div className="main">
-      <div className="nav">
-        <p>Gemini Chat</p>
-        <img src={assets.user_icon} alt="user" />
-      </div>
 
-      <div className="main-container">
-        <div className="chat-window">
-          {chatHistory.length === 0 ? (
-            <div className="greet">
-              <p>
-                <span>Hello Dev 👋</span>
-              </p>
-              <p>Ask me anything or just say hi!</p>
+    return (
+        <div className="main">
+            <div className="nav">
+                <p>Gemini Chat</p>
+                <img src={assets.user_icon} alt="user" />
             </div>
-          ) : (
-            chatHistory.map((msg, i) => (
-              <div key={i} className={`chat-bubble ${msg.type}`}>
-                <img
-                  src={
-                    msg.type === "bot" ? assets.gemini_icon : assets.user_icon
-                  }
-                  alt=""
-                />
-                <p dangerouslySetInnerHTML={{ __html: msg.text }}></p>
-              </div>
-            ))
-          )}
-          <div ref={chatEndRef}></div>
+
+            <div className="main-container">
+                <div className="chat-window">
+                    {chatHistory.length === 0 ? (
+                        <div className="greet">
+                            <p><span>Hi Dev 👋</span></p>
+                            <p>Ask me anything or just say hi!</p>
+                        </div>
+                    ) : (
+                        chatHistory.map((msg, i) => (
+                            <div key={i} className={`chat-bubble ${msg.type}`}>
+                                <img
+                                    src={msg.type === "bot" ? assets.gemini_icon : assets.user_icon}
+                                    alt=""
+                                />
+                                <p dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}></p>
+                            </div>
+                        ))
+                    )}
+                    <div ref={chatEndRef}></div>
+                </div>
+
+                <div className="main-bottom">
+                    <div className="search-box">
+                        <input
+                            type="text"
+                            placeholder="Type your question..."
+                            value={question}
+                            onChange={(e) => setQuestion(e.target.value)}
+                            onKeyDown={handleKeyPress}
+                        />
+
+                        <div>
+                            <img
+                                src={assets.mic_icon}
+                                alt="mic"
+                                onClick={listening ? stopListening : startListening}
+                                title={listening ? "Listening..." : "Start Listening"}
+                                style={{
+                                    filter: listening ? "drop-shadow(0 0 5px #4caf50)" : "none",
+                                    cursor: "pointer",
+                                }}
+                            />
+                        </div>
+
+                        <div>
+                            <img
+                                src={assets.send_icon}
+                                alt="send"
+                                onClick={generateAnswer}
+                                style={{ cursor: "pointer" }}
+                            />
+                        </div>
+                    </div>
+
+                    {loading && <p className="loading">Thinking...</p>}
+                    <p className="bottom-info">
+                        ⚠️ Gemini may provide inaccurate information. Kindly verify your own answers.
+                    </p>
+                </div>
+            </div>
         </div>
-
-        <div className="main-bottom">
-          <div className="search-box">
-            <input
-              type="text"
-              placeholder="Type your question..."
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={handleKeyPress}
-            />
-
-            <div>
-              <img
-                src={assets.mic_icon}
-                alt="mic"
-                onClick={listening ? stopListening : startListening}
-                title={listening ? "Listening..." : "Start Listening"}
-                style={{
-                  filter: listening ? "drop-shadow(0 0 5px #4caf50)" : "none",
-                  cursor: "pointer",
-                }}
-              />
-            </div>
-
-            <div>
-              <img
-                src={assets.send_icon}
-                alt="send"
-                onClick={generateAnswer}
-                style={{ cursor: "pointer" }}
-              />
-            </div>
-          </div>
-
-          {loading && <p className="loading">Thinking...</p>}
-          <p className="bottom-info">
-            ⚠️ Gemini may display inaccurate information. Verify before use.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
 
 export default Main;
