@@ -14,10 +14,6 @@ function Main() {
     const [lastTopic, setLastTopic] = useState(""); // for "more" context
     const chatEndRef = useRef(null);
 
-    // new state
-    const [generatedImage, setGeneratedImage] = useState(null);
-    const [generatingImage, setGeneratingImage] = useState(false);
-
 
     // Auto-scroll to latest chat
     useEffect(() => {
@@ -26,16 +22,21 @@ function Main() {
 
     // Normalize input using synonyms
     function normalizeQuestion(input) {
-        return input.toLowerCase().split(" ").map((word) => synonyms[word] || word).join(" ");
+        return input
+                .toLowerCase()
+                .split(" ")
+                .map((word) => synonyms[word] || word)
+                .join(" ");
     }
 
     // 🎯 Generate Answer (Custom Q&A + Gemini fallback)
     async function generateAnswer() {
+        console.log("question: " + question);
         if (!question.trim()) return;
-        setLoading(true);
-        SpeechRecognition.stopListening();
+            setLoading(true);
+            SpeechRecognition.stopListening();
 
-        let currentInput = question.toLowerCase();
+            let currentInput = question.toLowerCase();
 
         // 🧠 If user asks for "more" → refer to previous topic
         if (currentInput.includes("more") && lastTopic) {
@@ -44,12 +45,17 @@ function Main() {
 
         const normalized = normalizeQuestion(currentInput);
         const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.2 });
+        console.dir(fuse._docs);
         const customMatch = fuse.search(normalized);
+        console.log(customMatch);
+        console.dir(customMatch);
         let botResponse = "";
 
         // ✅ Custom Q&A match
         if (customMatch.length > 0) {
             const top = customMatch[0];
+            console.log(top);
+            console.dir(top);
             const questionWords = normalized.split(" ");
             const matchedWords = top.item.question
                 .split(" ")
@@ -70,6 +76,7 @@ function Main() {
                 setLoading(false);
                 return;
             }
+            
         }
 
         // ✅ Gemini API fallback
