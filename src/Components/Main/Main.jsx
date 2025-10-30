@@ -9,6 +9,7 @@ import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognitio
 
 function Main() {
     const [question, setQuestion] = useState("");
+    const [answer,  setAnswer] = useState("");
     const [loading, setLoading] = useState(false);
     const [chatHistory, setChatHistory] = useState([]);
     const [lastTopic, setLastTopic] = useState(""); // for "more" context
@@ -23,20 +24,19 @@ function Main() {
     // Normalize input using synonyms
     function normalizeQuestion(input) {
         return input
-                .toLowerCase()
-                .split(" ")
-                .map((word) => synonyms[word] || word)
-                .join(" ");
+            .toLowerCase()
+            .split(" ")
+            .map((word) => synonyms[word] || word)
+            .join(" ");
     }
 
     // 🎯 Generate Answer (Custom Q&A + Gemini fallback)
     async function generateAnswer() {
-        console.log("question: " + question);
         if (!question.trim()) return;
-            setLoading(true);
-            SpeechRecognition.stopListening();
+        setLoading(true);
+        SpeechRecognition.stopListening();
 
-            let currentInput = question.toLowerCase();
+        let currentInput = question.toLowerCase();
 
         // 🧠 If user asks for "more" → refer to previous topic
         if (currentInput.includes("more") && lastTopic) {
@@ -45,38 +45,58 @@ function Main() {
 
         const normalized = normalizeQuestion(currentInput);
         const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.2 });
-        console.dir(fuse._docs);
         const customMatch = fuse.search(normalized);
-        console.log(customMatch);
-        console.dir(customMatch);
         let botResponse = "";
 
         // ✅ Custom Q&A match
         if (customMatch.length > 0) {
             const top = customMatch[0];
-            console.log(top);
+            console.log("Top Answer: " + top);
             console.dir(top);
-            const questionWords = normalized.split(" ");
-            const matchedWords = top.item.question
-                .split(" ")
-                .filter((w) => questionWords.includes(w)).length;
+            botResponse = top.item.answer;
+            // Save chat and stop here (no Gemini call)
+            setChatHistory((prev) => [
+                ...prev,
+                { type: "user", text: question },
+                { type: "bot", text: botResponse },
+            ]);
+            setLastTopic(question);
+            setQuestion("");
+            resetTranscript();
+            setLoading(false);
+            return;
+        } else {
+            // setAnswer("Loading...");
+            setLoading(true);
+            const response = await axios({
+                url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
+                method: "post",
+                data: {
+                    contents: [
+                        { parts: [{ text: question }] },
+                    ],
+                },
+            });
 
-            if (matchedWords / questionWords.length >= 0.5) {
-                botResponse = top.item.answer;
-
-                // Save chat and stop here (no Gemini call)
-                setChatHistory((prev) => [
-                    ...prev,
-                    { type: "user", text: question },
-                    { type: "bot", text: botResponse },
-                ]);
-                setLastTopic(question);
-                setQuestion("");
-                resetTranscript();
-                setLoading(false);
-                return;
+            // Converting the generated information into proper format for the end user
+            let sameResponse = response.data.candidates[0].content.parts[0].text;
+            let newSplitReponse = sameResponse.split("**");
+            let finalResponse;
+            for (let i = 0; i < newSplitReponse.length; i++) {
+                if (i === 0 || i % 2 !== 1) {
+                    finalResponse += newSplitReponse[i];
+                } else {
+                    finalResponse += "<b>" + newSplitReponse[i] + "</b>";
+                }
             }
-            
+            finalResponse = finalResponse.replace(/^undefined/, "");
+            let finalResponse2 = finalResponse.split("*").join("</br>")
+            setAnswer(finalResponse2);
+
+            // Displaying raw data
+            // setAnswer(response.data.candidates[0].content.parts[0].text);
+
+            setLoading(false);
         }
 
         // ✅ Gemini API fallback
