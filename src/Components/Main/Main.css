@@ -69,6 +69,7 @@
     max-width: 900px;
     padding: 0px 20px;
     margin: auto;
+    margin-bottom: 20px;
 }
 .main-bottom .search-box {
     display: flex;
@@ -156,7 +157,6 @@
     }
 }
 .chat-bubble.user p {
-    /* background-color: #9ed7ff; */
     padding: 10px;
     text-align: right;
 }
@@ -173,7 +173,6 @@
   max-width: 50%;
   padding: 10px 14px;
   border-radius: 12px;
-  word-wrap: break-word;
   font-size: 15px;
   line-height: 1.4;
 }
@@ -215,4 +214,59 @@
 .chat-bubble.bot li {
   margin: 0.3rem 0;
   line-height: 1.5;
+}
+
+.color-chips-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.chip-wrapper {
+     display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.color-chip {
+  text-decoration: none;
+  color: #000;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  width: 120px;
+  text-align: center;
+  overflow: hidden;
+  background: #fff;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.color-chip:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.color-chip-top {
+    align-content: center;
+  height: 100px;
+  border-bottom: 1px solid #ccc;
+}
+
+.color-chip-bottom {
+  padding: 8px;
+}
+.behr-color-title {
+    font-size: 24px;
+    line-height: 24px;
+    font-weight: 400;
+    margin-bottom: 20px;
+}
+.color-name {
+    font-size: 16px;
+    line-height: 16px;
+    font-weight: 400;
+}
+.color-code {
+    font-size: 14px;
+    line-height: 16px;
+    font-weight: 700;
+    margin-top: 5px;
 }

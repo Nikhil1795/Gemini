@@ -23,6 +23,9 @@ const synonyms = {
 
   // use
   usage: "use", utilize: "use", utility: "use", application: "use", function: "use", benefit: "use", purpose2: "use",
+
+  // Color
+  colour: "color",colors: "color",shades: "color", shade: "color",
   
 };
 

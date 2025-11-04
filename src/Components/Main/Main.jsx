@@ -3,25 +3,30 @@ import "./Main.css";
 import Fuse from "fuse.js";
 import synonyms from "../synonyms";
 import customQA from "../customQA";
+import colorGroups from "./colorGroups";
 import axios from "axios";
+import ColorChips from "./ColorChips"; // ⬅️ import component
 import { assets } from "../../assets/assets";
 import SpeechRecognition, { useSpeechRecognition } from "react-speech-recognition";
 
 function Main() {
     const [question, setQuestion] = useState("");
-    const [answer,  setAnswer] = useState("");
+    const [answer, setAnswer] = useState("");
     const [loading, setLoading] = useState(false);
     const [chatHistory, setChatHistory] = useState([]);
-    const [lastTopic, setLastTopic] = useState(""); // for "more" context
     const chatEndRef = useRef(null);
 
+    const { transcript, listening, resetTranscript, browserSupportsSpeechRecognition } =
+        useSpeechRecognition();
 
-    // Auto-scroll to latest chat
+    useEffect(() => {
+        if (transcript) setQuestion(transcript);
+    }, [transcript]);
+
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [chatHistory]);
 
-    // Normalize input using synonyms
     function normalizeQuestion(input) {
         return input
             .toLowerCase()
@@ -30,168 +35,86 @@ function Main() {
             .join(" ");
     }
 
-    // 🎯 Generate Answer (Custom Q&A + Gemini fallback)
     async function generateAnswer() {
-        if (!question.trim()) return;
+        if (!question.trim()) return; 
+        // if (!question.trim()) {
+        //     setChatHistory(prev => [
+        //         ...prev,
+        //         { type: "user", text: question },
+        //         { type: "bot", text: "Please ask some questions related to the Behr colors" },
+        //     ]);
+        //     return;
+        // }
         setLoading(true);
         SpeechRecognition.stopListening();
 
-        let currentInput = question.toLowerCase();
+        const normalized = normalizeQuestion(question);
+        let botResponse = null;
 
-        // 🧠 If user asks for "more" → refer to previous topic
-        if (currentInput.includes("more") && lastTopic) {
-            currentInput = `Give me more about: ${lastTopic}`;
-        }
+        console.log("My Question: " + normalized);
 
-        const normalized = normalizeQuestion(currentInput);
-        const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.2 });
-        const customMatch = fuse.search(normalized);
-        let botResponse = "";
+        // 🎯 Try to find color in your JS
+        const colorData = colorGroups[0]["color-groups"];
+        console.log("My All Color Data: ", colorData);
 
-        // ✅ Custom Q&A match
-        if (customMatch.length > 0) {
-            const top = customMatch[0];
-            console.log("Top Answer: " + top);
-            console.dir(top);
-            botResponse = top.item.answer;
-            // Save chat and stop here (no Gemini call)
+        const matchedColorGroup = colorData.find((g) =>
+            normalized.includes(g["color-group"].toLowerCase())
+        );
+        console.log("My Matched Color Data: ", matchedColorGroup);
+
+        if (matchedColorGroup) {
+            // ✅ Display component instead of HTML string
             setChatHistory((prev) => [
                 ...prev,
                 { type: "user", text: question },
-                { type: "bot", text: botResponse },
+                { type: "bot-component", component: <ColorChips matchedGroup={matchedColorGroup} /> },
             ]);
-            setLastTopic(question);
             setQuestion("");
             resetTranscript();
             setLoading(false);
             return;
+        }
+
+        // 🧠 Fallback: Custom QA or Gemini
+        const fuse = new Fuse(customQA, { keys: ["question"], threshold: 0.3 });
+        const customQuestionMatch = fuse.search(normalized);
+
+        if (customQuestionMatch.length > 0) {
+            console.log("customQuestionMatch: " + customQuestionMatch);
+            botResponse = customQuestionMatch[0].item.answer;
         } else {
-            // setAnswer("Loading...");
-            setLoading(true);
-            const response = await axios({
-                url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
-                method: "post",
-                data: {
-                    contents: [
-                        { parts: [{ text: question }] },
-                    ],
-                },
-            });
+            try {
+                const response = await axios.post(
+                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
+                    { contents: [{ parts: [{ text: question }] }] }
+                );
 
-            // Converting the generated information into proper format for the end user
-            let sameResponse = response.data.candidates[0].content.parts[0].text;
-            let newSplitReponse = sameResponse.split("**");
-            let finalResponse;
-            for (let i = 0; i < newSplitReponse.length; i++) {
-                if (i === 0 || i % 2 !== 1) {
-                    finalResponse += newSplitReponse[i];
-                } else {
-                    finalResponse += "<b>" + newSplitReponse[i] + "</b>";
-                }
+                botResponse =
+                    response.data.candidates[0]?.content?.parts[0]?.text ||
+                    "Sorry, I didn’t get that.";
+
+                botResponse = botResponse
+                    .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
+                    .replace(/\*(.*?)\*/g, "<i>$1</i>")
+                    .replace(/\n/g, "<br>");
+            } catch (err) {
+                botResponse = "⚠️ Error fetching response from Gemini API.";
             }
-            finalResponse = finalResponse.replace(/^undefined/, "");
-            let finalResponse2 = finalResponse.split("*").join("</br>")
-            setAnswer(finalResponse2);
-
-            // Displaying raw data
-            // setAnswer(response.data.candidates[0].content.parts[0].text);
-
-            setLoading(false);
         }
 
-        // ✅ Gemini API fallback
-        try {
-            const response = await axios({
-                url: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
-                method: "post",
-                data: {
-                    contents: [{ parts: [{ text: currentInput }] }],
-                },
-            });
-
-            const rawText =
-                response.data.candidates[0]?.content?.parts[0]?.text ||
-                "Sorry, I didn’t get that.";
-
-            botResponse = rawText
-                .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-                .replace(/\*(.*?)\*/g, "<i>$1</i>")
-                .replace(/\n/g, "<br>");
-        } catch (err) {
-            botResponse = "⚠️ Error fetching response from Gemini.";
-        }
-
-        // ✅ Add Gemini answer to chat
         setChatHistory((prev) => [
             ...prev,
             { type: "user", text: question },
             { type: "bot", text: botResponse },
         ]);
-        setLastTopic(question);
+
+        setAnswer(botResponse);
         setQuestion("");
         resetTranscript();
         setLoading(false);
     }
 
-    // Pressing Enter sends question
-    const handleKeyPress = (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            generateAnswer();
-        }
-    };
-
-    // 🎙️ Speech Recognition Setup
-    const {
-        transcript,
-        listening,
-        resetTranscript,
-        browserSupportsSpeechRecognition,
-    } = useSpeechRecognition();
-
-    useEffect(() => {
-        if (transcript) setQuestion(transcript);
-    }, [transcript]);
-
-    const startListening = () => {
-        resetTranscript();
-        SpeechRecognition.startListening({ continuous: true, language: "en-IN" });
-    };
-
-    const stopListening = () => {
-        SpeechRecognition.stopListening();
-    };
-
-    if (!browserSupportsSpeechRecognition) {
-        return <p>Your browser does not support speech recognition.</p>;
-    }
-
-    // 🧾 Format message text for lists, bold, italics
-    function formatMessage(text) {
-        if (!text) return "";
-
-        let formatted = text
-            .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
-            .replace(/\*(.*?)\*/g, "<i>$1</i>")
-            .replace(/(^|\n)(\d+)\.\s+(.*?)(?=\n|$)/g, "$1<li>$2. $3</li>")
-            .replace(/(^|\n)[•\-]\s+(.*?)(?=\n|$)/g, "$1<li>• $2</li>")
-            .replace(/\n/g, "<br>");
-
-        if (formatted.includes("<li>")) formatted = "<ul>" + formatted + "</ul>";
-
-        return formatted;
-    }
-
-    // Dowload image
-    function downloadDataUrl(dataUrl, filename = "generated-image.png") {
-        const link = document.createElement("a");
-        link.href = dataUrl;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-    }
-
+    const handleKeyPress = (e) => e.key === "Enter" && generateAnswer();
 
     return (
         <div className="main">
@@ -211,10 +134,14 @@ function Main() {
                         chatHistory.map((msg, i) => (
                             <div key={i} className={`chat-bubble ${msg.type}`}>
                                 <img
-                                    src={msg.type === "bot" ? assets.gemini_icon : assets.user_icon}
+                                    src={msg.type === "bot" || msg.type === "bot-component" ? assets.gemini_icon : assets.user_icon}
                                     alt=""
                                 />
-                                <p dangerouslySetInnerHTML={{ __html: formatMessage(msg.text) }}></p>
+                                {msg.type === "bot-component" ? (
+                                    msg.component
+                                ) : (
+                                    <p dangerouslySetInnerHTML={{ __html: msg.text }}></p>
+                                )}
                             </div>
                         ))
                     )}
@@ -230,34 +157,27 @@ function Main() {
                             onChange={(e) => setQuestion(e.target.value)}
                             onKeyDown={handleKeyPress}
                         />
-
-                        <div>
-                            <img
-                                src={assets.mic_icon}
-                                alt="mic"
-                                onClick={listening ? stopListening : startListening}
-                                title={listening ? "Listening..." : "Start Listening"}
-                                style={{
-                                    filter: listening ? "drop-shadow(0 0 5px #4caf50)" : "none",
-                                    cursor: "pointer",
-                                }}
-                            />
-                        </div>
-
-                        <div>
-                            <img
-                                src={assets.send_icon}
-                                alt="send"
-                                onClick={generateAnswer}
-                                style={{ cursor: "pointer" }}
-                            />
-                        </div>
+                        <img
+                            src={assets.mic_icon}
+                            alt="mic"
+                            onClick={() =>
+                                listening
+                                    ? SpeechRecognition.stopListening()
+                                    : SpeechRecognition.startListening({ continuous: true })
+                            }
+                            style={{
+                                filter: listening ? "drop-shadow(0 0 5px #4caf50)" : "none",
+                                cursor: "pointer",
+                            }}
+                        />
+                        <img
+                            src={assets.send_icon}
+                            alt="send"
+                            onClick={generateAnswer}
+                            style={{ cursor: "pointer" }}
+                        />
                     </div>
-
                     {loading && <p className="loading">Thinking...</p>}
-                    <p className="bottom-info">
-                        ⚠️ Gemini may provide inaccurate information. Kindly verify your own answers.
-                    </p>
                 </div>
             </div>
         </div>
