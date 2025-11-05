@@ -35,6 +35,15 @@ function Main() {
             .join(" ");
     }
 
+    function clearSpeechInput() {
+        SpeechRecognition.stopListening();
+        setQuestion("");
+        setTimeout(() => {
+            resetTranscript();
+        }, 1000);
+        setLoading(false);
+    }
+
     async function generateAnswer() {
         if (!question.trim()) return; 
         // if (!question.trim()) {
@@ -55,23 +64,21 @@ function Main() {
 
         // 🎯 Try to find color in your JS
         const colorData = colorGroups[0]["color-groups"];
-        console.log("My All Color Data: ", colorData);
+        // console.log("My All Color Data: ", colorData);
 
         const matchedColorGroup = colorData.find((g) =>
             normalized.includes(g["color-group"].toLowerCase())
         );
-        console.log("My Matched Color Data: ", matchedColorGroup);
 
         if (matchedColorGroup) {
             // ✅ Display component instead of HTML string
+            console.log("Getting result from Color Database for: " + matchedColorGroup);
             setChatHistory((prev) => [
                 ...prev,
                 { type: "user", text: question },
                 { type: "bot-component", component: <ColorChips matchedGroup={matchedColorGroup} /> },
             ]);
-            setQuestion("");
-            resetTranscript();
-            setLoading(false);
+            clearSpeechInput();
             return;
         }
 
@@ -80,25 +87,32 @@ function Main() {
         const customQuestionMatch = fuse.search(normalized);
 
         if (customQuestionMatch.length > 0) {
-            console.log("customQuestionMatch: " + customQuestionMatch);
+            console.log("customQuestionMatch: " , customQuestionMatch);
             botResponse = customQuestionMatch[0].item.answer;
+            console.log("botResponse: " , botResponse);
+            clearSpeechInput();
         } else {
+            console.log("Getting response from Gemini API");
             try {
                 const response = await axios.post(
                     "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
                     { contents: [{ parts: [{ text: question }] }] }
                 );
 
+                // botResponse =
+                //     response.data.candidates[0]?.content?.parts[0]?.text ||
+                //     "Sorry, I didn’t get that.";
                 botResponse =
-                    response.data.candidates[0]?.content?.parts[0]?.text ||
-                    "Sorry, I didn’t get that.";
+                    response.data.candidates[0]?.content?.parts[0]?.text;
 
                 botResponse = botResponse
                     .replace(/\*\*(.*?)\*\*/g, "<b>$1</b>")
                     .replace(/\*(.*?)\*/g, "<i>$1</i>")
                     .replace(/\n/g, "<br>");
+                console.log("Reponse generated from Gemini API");
             } catch (err) {
                 botResponse = "⚠️ Error fetching response from Gemini API.";
+                console.log("Error Caught from Gemini");
             }
         }
 
@@ -109,9 +123,7 @@ function Main() {
         ]);
 
         setAnswer(botResponse);
-        setQuestion("");
-        resetTranscript();
-        setLoading(false);
+        clearSpeechInput();
     }
 
     const handleKeyPress = (e) => e.key === "Enter" && generateAnswer();
