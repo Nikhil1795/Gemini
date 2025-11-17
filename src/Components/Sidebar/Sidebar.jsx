@@ -5,7 +5,7 @@ import { assets } from "../../assets/assets";
 
 const Sidebar = () => {
 
-    const [extended,setExtended] = useState(true);
+    const [extended,setExtended] = useState(false);
 
     function refreshPage() {
         window.location.reload();
