@@ -1,4 +1,3 @@
-// API_KEY = "AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk"
 const customQA = [
     {
         question: "What do you like to eat?",

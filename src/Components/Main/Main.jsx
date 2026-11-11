@@ -220,7 +220,7 @@ function Main() {
         } else {
             try {
                 const response = await axios.post(
-                    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=AIzaSyB6ZvDo3qUvuonroMCdWePm8ey8SchCkbk",
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${import.meta.env.VITE_GEMINI_API_KEY}`,
                     { contents: [{ parts: [{ text: question }] }] }
                 );
 
